@@ -71,7 +71,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const highRisks = riskClauses.filter((c) => c.severity === "high");
   const medRisks = riskClauses.filter((c) => c.severity === "medium");
 
-  const sanitizedText = prepareDocumentForPrompt(text, 20000);
+  // EFF-04: Only send the full document when we have no clause context.
+  // When clauses + summary are available, the clause summary already captures
+  // the high-value signal — sending the full doc adds tokens with little benefit.
+  // If context is thin, fall back to a 20k-char excerpt for adequate coverage.
+  const hasClauseContext = clauses.length > 0 && summary.trim().length > 0;
+
+  const sanitizedText = hasClauseContext
+    ? null
+    : prepareDocumentForPrompt(text, 20000);
 
   const clauseSummary = [
     summary ? `Document Summary: ${summary}` : "",
@@ -88,11 +96,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const prompt = `Here is the legal document and risk analysis:
 
 ${clauseSummary || "No prior risk analysis available — analyze from the document below."}
-
-Full Document (for context):
----
-${sanitizedText}
----
+${
+  sanitizedText
+    ? `\nFull Document (for context):\n---\n${sanitizedText}\n---`
+    : ""
+}
 
 Generate the Before-You-Sign checklist and lawyer questions.`;
 

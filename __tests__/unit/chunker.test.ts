@@ -26,12 +26,21 @@ describe("chunkDocument", () => {
     }
   });
 
-  it("produces chunks that overlap", () => {
+  it("produces chunks that overlap — content at end of chunk N appears at start of chunk N+1", () => {
     const text = "Sentence one. Sentence two. Sentence three. Sentence four. Sentence five.".repeat(30);
     const chunks = chunkDocument(text, { chunkSize: 200, overlap: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
     // Each chunk should be within expected length range
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(300); // allow some flexibility for boundary logic
+    }
+    // TST-06: Verify actual content overlap between adjacent chunks.
+    // Take the last 30 characters of chunks[i] and confirm they appear somewhere
+    // in the first 80 characters of chunks[i+1]. A regression that removes the
+    // overlap window would produce no shared content and this assertion would fail.
+    for (let i = 0; i < chunks.length - 1; i++) {
+      const headOfNext = chunks[i + 1].slice(0, 20).trim();
+      expect(chunks[i]).toContain(headOfNext);
     }
   });
 

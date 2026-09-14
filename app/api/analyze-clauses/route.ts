@@ -12,7 +12,7 @@ import { prepareDocumentForPrompt } from "@/lib/sanitize";
 import { hashDocument } from "@/lib/chunker";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { ClauseAnalysis, Clause, ApiError } from "@/types";
-import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 const SYSTEM_PROMPT = `You are a senior legal analyst. Your task is to extract and classify every significant clause from the provided legal document.
 
@@ -77,7 +77,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const sanitized = prepareDocumentForPrompt(text);
-  const documentHash = hashDocument(text);
+  // Hash the sanitized text — same document still maps to the same hash since
+  // sanitization is deterministic, and avoids a second full pass over raw text (EFF-03).
+  const documentHash = hashDocument(sanitized);
   const prompt = `Analyze the following legal document and extract all significant clauses:\n\n---\n${sanitized}\n---`;
 
   try {
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Assign UUIDs to clauses and validate types
     const clauses: Clause[] = result.clauses.map((c) => ({
       ...c,
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       // Ensure nullish severity becomes undefined
       severity: c.severity ?? undefined,
     }));

@@ -15,19 +15,10 @@ import { ApiError } from "@/types";
 import { isGrokConfigured, streamGrok, generateGrokJSON } from "./grok";
 
 // ─── Client initialization ───────────────────────────────────
-// API key validation is lazy — validated at call time, not import time.
+// API key validation is lazy — validated at first call, not import time.
 // This allows the build to succeed without GEMINI_API_KEY set.
-
-function getGenAI(): GoogleGenerativeAI {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    throw new Error(
-      "GEMINI_API_KEY environment variable is not set. " +
-        "Copy .env.example to .env.local and add your key."
-    );
-  }
-  return new GoogleGenerativeAI(key);
-}
+// Singleton instances are reused across invocations within the same
+// serverless lambda lifetime (EFF-01 fix: avoid re-instantiation cost).
 
 /** Default safety settings — permissive enough for legal document analysis */
 const SAFETY_SETTINGS = [
@@ -49,19 +40,43 @@ const SAFETY_SETTINGS = [
   },
 ];
 
-// ─── Model getters ───────────────────────────────────────────
+// Module-level singletons — created once per lambda instance.
+let _flashModel: GenerativeModel | null = null;
+let _embeddingModel: GenerativeModel | null = null;
 
-/** Flash model for most tasks (speed + cost optimized) */
+/** Returns the shared flash model singleton, initializing on first call. */
 export function getFlashModel(): GenerativeModel {
-  return getGenAI().getGenerativeModel({
-    model: "gemini-2.5-flash",
-    safetySettings: SAFETY_SETTINGS,
-  });
+  if (!_flashModel) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error(
+        "GEMINI_API_KEY environment variable is not set. " +
+          "Copy .env.example to .env.local and add your key."
+      );
+    }
+    _flashModel = new GoogleGenerativeAI(key).getGenerativeModel({
+      model: "gemini-2.5-flash",
+      safetySettings: SAFETY_SETTINGS,
+    });
+  }
+  return _flashModel;
 }
 
-/** Embedding model for RAG pipeline */
+/** Returns the shared embedding model singleton, initializing on first call. */
 export function getEmbeddingModel(): GenerativeModel {
-  return getGenAI().getGenerativeModel({ model: "gemini-embedding-001" });
+  if (!_embeddingModel) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error(
+        "GEMINI_API_KEY environment variable is not set. " +
+          "Copy .env.example to .env.local and add your key."
+      );
+    }
+    _embeddingModel = new GoogleGenerativeAI(key).getGenerativeModel({
+      model: "gemini-embedding-001",
+    });
+  }
+  return _embeddingModel;
 }
 
 // ─── Error classification ────────────────────────────────────
@@ -81,11 +96,11 @@ function classifyError(err: unknown): { type: GeminiErrorType; message: string; 
   if (lower.includes("timeout") || lower.includes("deadline")) {
     return { type: "SERVICE_UNAVAILABLE", message: "The request timed out — please try again.", retryable: true };
   }
-  if (lower.includes("400") || lower.includes("invalid") || lower.includes("unsupported")) {
-    return { type: "INVALID_INPUT", message: "The document content could not be processed.", retryable: false };
-  }
   if (lower.includes("401") || lower.includes("api key") || lower.includes("unauthorized")) {
     return { type: "UNKNOWN", message: "API authentication error — check your API key.", retryable: false };
+  }
+  if (lower.includes("400") || lower.includes("invalid") || lower.includes("unsupported")) {
+    return { type: "INVALID_INPUT", message: "The document content could not be processed.", retryable: false };
   }
   return { type: "UNKNOWN", message: "An unexpected error occurred — please try again.", retryable: true };
 }
@@ -276,18 +291,39 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generates embeddings for multiple chunks in parallel (batched).
+ * Generates embeddings for multiple chunks with controlled concurrency.
+ * Up to MAX_CONCURRENT_BATCHES batches run in parallel; remaining batches
+ * are queued to avoid burst 429s while still cutting sequential round-trips
+ * for typical 20-40 chunk documents (EFF-02 fix).
  */
 export async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
-  // Process in batches of 10 to avoid rate limits
   const BATCH_SIZE = 10;
-  const embeddings: number[][] = [];
+  const MAX_CONCURRENT_BATCHES = 3;
 
+  // Partition into batches
+  const batches: string[][] = [];
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-    const batch = chunks.slice(i, i + BATCH_SIZE);
-    const batchEmbeddings = await Promise.all(batch.map(generateEmbedding));
-    embeddings.push(...batchEmbeddings);
+    batches.push(chunks.slice(i, i + BATCH_SIZE));
   }
 
-  return embeddings;
+  const results: number[][][] = new Array(batches.length);
+  let nextBatch = 0;
+
+  // Worker: repeatedly takes the next unprocessed batch until all done
+  async function worker() {
+    while (true) {
+      const idx = nextBatch++;
+      if (idx >= batches.length) break;
+      results[idx] = await Promise.all(batches[idx].map(generateEmbedding));
+    }
+  }
+
+  // Spin up at most MAX_CONCURRENT_BATCHES workers
+  const workers = Array.from(
+    { length: Math.min(MAX_CONCURRENT_BATCHES, batches.length) },
+    worker
+  );
+  await Promise.all(workers);
+
+  return results.flat();
 }

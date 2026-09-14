@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { ApiError } from "@/types";
 
 interface DocumentUploaderProps {
-  onDocumentLoaded: (text: string, name: string) => void;
+  onDocumentLoaded: (text: string, name: string, hash: string) => void;
   onError: (err: ApiError) => void;
   label?: string;
   id?: string;
@@ -30,7 +30,8 @@ export default function DocumentUploader({
       const res  = await fetch("/api/parse", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { onError(data as ApiError); return; }
-      onDocumentLoaded(data.text, data.name);
+      // Use server-returned hash directly — avoids recomputing SHA-256 on main thread (EFF-08)
+      onDocumentLoaded(data.text, data.name, data.documentHash);
     } catch {
       onError({ error: "Failed to upload the document. Please try again.", errorType: "UNKNOWN", retryable: true });
     } finally {
@@ -58,7 +59,8 @@ export default function DocumentUploader({
       const res  = await fetch("/api/parse", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { onError(data as ApiError); return; }
-      onDocumentLoaded(data.text, "Pasted Document");
+      // Use server-returned hash directly — avoids recomputing SHA-256 on main thread (EFF-08)
+      onDocumentLoaded(data.text, "Pasted Document", data.documentHash);
     } catch {
       onError({ error: "Failed to process the pasted text.", errorType: "UNKNOWN", retryable: true });
     } finally {

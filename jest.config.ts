@@ -10,12 +10,15 @@ const config = {
       tsconfig: {
         moduleResolution: "node",
         esModuleInterop: true,
+        jsx: "react-jsx",
       }
     }],
   },
+  setupFilesAfterEnv: ["@testing-library/jest-dom"],
   collectCoverageFrom: [
     "lib/**/*.ts",
     "app/api/**/*.ts",
+    "components/**/*.tsx",
     "!**/*.d.ts",
   ],
 };

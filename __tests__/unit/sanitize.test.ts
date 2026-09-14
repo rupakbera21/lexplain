@@ -43,10 +43,28 @@ describe("sanitizeForPrompt", () => {
     expect(result).not.toContain("${process.env.SECRET}");
   });
 
-  it("collapses excessive newlines", () => {
+  it("collapses excessive newlines (4+)", () => {
     const text = "Paragraph 1\n\n\n\n\n\nParagraph 2";
     const result = sanitizeForPrompt(text);
     expect(result).not.toContain("\n\n\n\n");
+  });
+
+  // TST-08: Pin the exact 3-vs-4 newline boundary to prevent silent regression.
+  it("passes 3 consecutive newlines through unchanged (exactly at boundary)", () => {
+    const text = "Para 1\n\n\nPara 2";
+    const result = sanitizeForPrompt(text);
+    // 3 newlines should NOT be collapsed
+    expect(result).toContain("\n\n\n");
+  });
+
+  it("collapses exactly 4 consecutive newlines to 3 (boundary collapse)", () => {
+    const text = "Para 1\n\n\n\nPara 2";
+    const result = sanitizeForPrompt(text);
+    // 4 newlines should be collapsed
+    expect(result).not.toContain("\n\n\n\n");
+    // but content should still be separated
+    expect(result).toContain("Para 1");
+    expect(result).toContain("Para 2");
   });
 
   it("handles case-insensitive matches", () => {

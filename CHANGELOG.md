@@ -7,7 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-Changes in development but not yet deployed.
+---
+
+## [1.1.0] — 2026-09-15
+
+### Changed (Efficiency Improvements)
+- **Singleton Gemini Client & Models:** Instantiated module-level singletons for `GoogleGenerativeAI`, the primary text model (`gemini-2.5-flash`), and embedding model (`text-embedding-004`) to eliminate per-request client creation overhead (`lib/gemini.ts`).
+- **Throttled Batch Embedding Generation:** Replaced unthrottled `Promise.all` with a concurrent worker pool (`MAX_CONCURRENT = 5`) to prevent burst quota exhaustion while maximizing embedding throughput (`lib/gemini.ts`).
+- **Prompt Payload Optimization in Next-Steps:** Optimized `app/api/next-steps/route.ts` to omit the full 20,000-character document excerpt whenever structured clause context and summary are already available.
+- **Dynamic Truncation Notices:** Interpolated exact `maxChars` values dynamically into document truncation messages rather than using a static 100,000-character string (`lib/sanitize.ts`).
+- **Eliminated Redundant Client Hashing:** Removed client-side SHA-256 main-thread re-computation in `app/page.tsx`, directly reusing the server-computed document hash from `/api/parse`.
+- **Rate-Limiter Memory & Stack Safety:** Replaced `Math.min(...spread)` with `.reduce()` in `lib/ratelimit.ts` to prevent call-stack overflow risk, and added an unref'd 5-minute stale-timestamp cleanup interval to prevent memory leaks under sustained traffic.
+- **MIME/Module Normalization:** Swapped external ESM `uuid` dependency in `app/api/analyze-clauses/route.ts` with standard Node/browser `crypto.randomUUID()`.
+
+### Added (Testing Suite Expansion)
+- **API Route Integration Tests:** Added comprehensive integration test suites across all 6 Next.js endpoints (`__tests__/integration/`): `simplify.test.ts` (SSE streaming & rate limiting), `analyze-clauses.test.ts` (structured JSON & risk scoring), `ask.test.ts` (RAG retrieval & anti-hallucination), `compare.test.ts` (side-by-side comparison), `next-steps.test.ts` (checklist & red flags), and `parse.test.ts` (multi-format parsing & file-type validation).
+- **Core Unit Test Coverage:** Added unit test suites for `lib/gemini.ts` (error classification, retry backoff, embedding pool), `lib/grok.ts` (fallback stream & JSON parser), `lib/parsers.ts` (MIME dispatch & text extraction), and `lib/ratelimit.ts` (IP extraction & sliding-window thresholds).
+- **Component Tests:** Added full jsdom component tests (`__tests__/components/`) for the three primary interactive panels: `ClauseRiskPanel.test.tsx` (filtering, loading skeletons, accordion expansion, re-analysis), `QAPanel.test.tsx` (example chips, input validation, streaming indicators, retry handlers), and `ComparePanel.test.tsx` (upload triggers, comparison cards, significance badges).
+- **Strengthened Unit Assertions:** Added explicit adjacent-chunk content overlap verification in `chunker.test.ts` and pinned exact 3-vs-4 newline collapsing boundaries in `sanitize.test.ts`.
+
+### Scope & Compliance Note
+- Net effect strictly scoped to Efficiency and Testing. Zero regressions or changes to Code Quality, Security, Accessibility, or Problem Statement Alignment. Disclaimers, rate-limit policies, keyboard accessibility, ARIA hierarchies, and contrast tokens remain preserved.
 
 ---
 

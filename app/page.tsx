@@ -11,7 +11,6 @@ import ComparePanel from "@/components/ComparePanel";
 import QAPanel from "@/components/QAPanel";
 import NextStepsPanel from "@/components/NextStepsPanel";
 import { ClauseAnalysis, ApiError } from "@/types";
-import { hashDocument } from "@/lib/chunker";
 
 type TabId = "simplify" | "clauses" | "compare" | "ask" | "nextsteps";
 
@@ -40,10 +39,11 @@ export default function Home() {
   const [analysisCache, setAnalysisCache] = useState<ClauseAnalysis | null>(null);
   const [logoError, setLogoError]         = useState(false);
 
-  const handleDocumentLoaded = useCallback((text: string, name: string) => {
+  const handleDocumentLoaded = useCallback((text: string, name: string, hash: string) => {
     setDocumentText(text);
     setDocumentName(name);
-    setDocumentHash(hashDocument(text));
+    // Use hash returned by /api/parse — avoids redundant SHA-256 on main thread (EFF-08)
+    setDocumentHash(hash);
     setUploadError(null);
     setAnalysisCache(null);
     setActiveTab("simplify");

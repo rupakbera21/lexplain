@@ -75,7 +75,7 @@ export function truncateToMaxChars(text: string, maxChars: number = 100000): str
   if (text.length <= maxChars) return text;
   return (
     text.slice(0, maxChars) +
-    "\n\n[Document truncated at 100,000 characters due to length limits]"
+    `\n\n[Document truncated at ${maxChars.toLocaleString()} characters due to length limits]`
   );
 }
 

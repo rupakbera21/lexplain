@@ -12,10 +12,14 @@ const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_RPM ?? "20", 10);
 
 // In-memory store: IP → list of request timestamps
+// KNOWN LIMITATION: This store is not shared across Vercel serverless instances.
+// A user could bypass the rate limit by triggering cold-start Lambda instances.
+// For stronger enforcement in production, replace with a Redis/KV-backed limiter.
+// Left as-is intentionally — infra change tracked for future work.
 const requestLog = new Map<string, number[]>();
 
 // Clean up old entries every 5 minutes to prevent memory leaks
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [ip, timestamps] of requestLog.entries()) {
     const valid = timestamps.filter((t) => now - t < WINDOW_MS);
@@ -26,6 +30,9 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+if (typeof cleanupTimer.unref === "function") {
+  cleanupTimer.unref();
+}
 
 /**
  * Gets the client IP from the request headers.
@@ -52,7 +59,7 @@ export function checkRateLimit(req: NextRequest): ApiError | null {
   const inWindow = existing.filter((t) => t > windowStart);
 
   if (inWindow.length >= MAX_REQUESTS) {
-    const oldestInWindow = Math.min(...inWindow);
+    const oldestInWindow = inWindow.reduce((min, t) => (t < min ? t : min), inWindow[0]);
     const resetIn = Math.ceil((oldestInWindow + WINDOW_MS - now) / 1000);
     return {
       error: `Rate limit exceeded. Please wait ${resetIn} seconds before trying again.`,
