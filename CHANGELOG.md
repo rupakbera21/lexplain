@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Dynamic Truncation Notices:** Interpolated exact `maxChars` values dynamically into document truncation messages rather than using a static 100,000-character string (`lib/sanitize.ts`).
 - **Eliminated Redundant Client Hashing:** Removed client-side SHA-256 main-thread re-computation in `app/page.tsx`, directly reusing the server-computed document hash from `/api/parse`.
 - **Rate-Limiter Memory & Stack Safety:** Replaced `Math.min(...spread)` with `.reduce()` in `lib/ratelimit.ts` to prevent call-stack overflow risk, and added an unref'd 5-minute stale-timestamp cleanup interval to prevent memory leaks under sustained traffic.
+- **Quota-Specific Grok Fallback & UI Indicators:** Hardened Gemini-to-Grok failover to trigger specifically on 429 / quota exhaustion with transparent client-side fallback status indicators.
 - **MIME/Module Normalization:** Swapped external ESM `uuid` dependency in `app/api/analyze-clauses/route.ts` with standard Node/browser `crypto.randomUUID()`.
 
 ### Added (Testing Suite Expansion)
