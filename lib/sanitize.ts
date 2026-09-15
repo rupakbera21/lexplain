@@ -85,3 +85,44 @@ export function truncateToMaxChars(text: string, maxChars: number = 100000): str
 export function prepareDocumentForPrompt(text: string, maxChars?: number): string {
   return truncateToMaxChars(sanitizeForPrompt(text), maxChars);
 }
+
+/**
+ * Strips literal markdown formatting artifacts (**bold**, stray -- / --- separators)
+ * from AI-generated text before it reaches the user.
+ */
+export function cleanMarkdownArtifacts(text: string): string {
+  if (!text || typeof text !== "string") return text;
+  return (
+    text
+      // Remove literal markdown bold markers: **text** -> text or stray **
+      .replace(/\*\*/g, "")
+      // Remove divider / separator lines consisting of -- or --- alone on a line
+      .replace(/^[ \t]*--+[ \t]*$/gm, "")
+      // Remove stray -- or --- surrounded by whitespace used as ad-hoc separators
+      .replace(/[ \t]+--+[ \t]+/g, " ")
+      // Clean up double spaces created by separator removal (without touching newlines)
+      .replace(/[^\S\r\n]{2,}/g, " ")
+      // Normalize excessive empty lines
+      .replace(/\n{3,}/g, "\n\n")
+  );
+}
+
+/**
+ * Recursively cleans markdown artifacts from strings inside structured JSON objects/arrays.
+ */
+export function cleanObjectMarkdownArtifacts<T>(obj: T): T {
+  if (typeof obj === "string") {
+    return cleanMarkdownArtifacts(obj) as unknown as T;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanObjectMarkdownArtifacts(item)) as unknown as T;
+  }
+  if (obj !== null && typeof obj === "object") {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      cleaned[key] = cleanObjectMarkdownArtifacts(value);
+    }
+    return cleaned as T;
+  }
+  return obj;
+}

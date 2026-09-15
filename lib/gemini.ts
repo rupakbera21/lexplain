@@ -13,6 +13,7 @@ import {
 } from "@google/generative-ai";
 import { ApiError } from "@/types";
 import { isGrokConfigured, streamGrok, generateGrokJSON } from "./grok";
+import { cleanMarkdownArtifacts, cleanObjectMarkdownArtifacts } from "./sanitize";
 
 // ─── Client initialization ───────────────────────────────────
 // API key validation is lazy — validated at first call, not import time.
@@ -214,8 +215,11 @@ export async function generateStreamingResponse(
           for await (const chunk of result.stream) {
             const text = chunk.text();
             if (text) {
-              // Format as Server-Sent Events
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+              const cleanedText = cleanMarkdownArtifacts(text);
+              if (cleanedText) {
+                // Format as Server-Sent Events
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: cleanedText })}\n\n`));
+              }
             }
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -297,7 +301,8 @@ export async function generateStructuredJSON<T>(
     try {
       // Strip markdown code fences if present
       const cleaned = text.replace(/^```json\n?/m, "").replace(/```$/m, "").trim();
-      return JSON.parse(cleaned) as T;
+      const parsed = JSON.parse(cleaned) as T;
+      return cleanObjectMarkdownArtifacts(parsed);
     } catch {
       throw {
         error: "Failed to parse AI response as structured data.",

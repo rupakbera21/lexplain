@@ -184,13 +184,13 @@ describe("generateStreamingResponse — quota-specific Grok fallback", () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.GEMINI_API_KEY = "test-mock-gemini-key";
-    process.env.XAI_API_KEY = "test-mock-xai-key";
+    process.env.GROK_API_KEY = "test-mock-grok-key";
     global.fetch = mockFetch;
     jest.clearAllMocks();
   });
 
   afterEach(() => {
-    delete process.env.XAI_API_KEY;
+    delete process.env.GROK_API_KEY;
   });
 
   it("falls back to Grok (streaming) when Gemini throws a 429 quota error", async () => {
@@ -260,13 +260,13 @@ describe("generateStructuredJSON — quota-specific Grok fallback", () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.GEMINI_API_KEY = "test-mock-gemini-key";
-    process.env.XAI_API_KEY = "test-mock-xai-key";
+    process.env.GROK_API_KEY = "test-mock-grok-key";
     global.fetch = mockFetch;
     jest.clearAllMocks();
   });
 
   afterEach(() => {
-    delete process.env.XAI_API_KEY;
+    delete process.env.GROK_API_KEY;
   });
 
   it("falls back to Grok (JSON) when Gemini throws a quota (429) error and attaches _via_fallback marker", async () => {

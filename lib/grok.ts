@@ -1,16 +1,17 @@
 // ============================================================
 // lib/grok.ts — xAI (Grok) Fallback Client for Lexplain
 // Automatically activated if Gemini API fails or runs out of quota.
-// Read XAI_API_KEY from server-side env vars only.
+// Read GROK_API_KEY from server-side env vars only.
 // ============================================================
 
 import { ApiError } from "@/types";
+import { cleanMarkdownArtifacts, cleanObjectMarkdownArtifacts } from "@/lib/sanitize";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_MODEL = "grok-2-latest";
 
 export function isGrokConfigured(): boolean {
-  return Boolean(process.env.XAI_API_KEY && process.env.XAI_API_KEY.trim().length > 0);
+  return Boolean(process.env.GROK_API_KEY && process.env.GROK_API_KEY.trim().length > 0);
 }
 
 /**
@@ -20,9 +21,9 @@ export async function streamGrok(
   prompt: string,
   systemPrompt?: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = process.env.GROK_API_KEY;
   if (!apiKey) {
-    throw new Error("XAI_API_KEY is not configured for Grok fallback.");
+    throw new Error("GROK_API_KEY is not configured for Grok fallback.");
   }
 
   const messages = [
@@ -86,10 +87,13 @@ export async function streamGrok(
               const parsed = JSON.parse(dataStr);
               const chunkText = parsed.choices?.[0]?.delta?.content;
               if (chunkText) {
-                // Emit in Lexplain's SSE format
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ text: chunkText })}\n\n`)
-                );
+                const cleanedText = cleanMarkdownArtifacts(chunkText);
+                if (cleanedText) {
+                  // Emit in Lexplain's SSE format
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ text: cleanedText })}\n\n`)
+                  );
+                }
               }
             } catch {
               // Ignore malformed intermediate chunks
@@ -122,9 +126,9 @@ export async function generateGrokJSON<T>(
   prompt: string,
   systemPrompt: string
 ): Promise<T> {
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = process.env.GROK_API_KEY;
   if (!apiKey) {
-    throw new Error("XAI_API_KEY is not configured for Grok fallback.");
+    throw new Error("GROK_API_KEY is not configured for Grok fallback.");
   }
 
   const messages = [
@@ -163,7 +167,8 @@ export async function generateGrokJSON<T>(
 
   try {
     const cleaned = rawContent.replace(/^```json\n?/m, "").replace(/```$/m, "").trim();
-    return JSON.parse(cleaned) as T;
+    const parsed = JSON.parse(cleaned) as T;
+    return cleanObjectMarkdownArtifacts(parsed);
   } catch {
     console.error("[Lexplain:Grok] Failed to parse JSON:", rawContent);
     throw {

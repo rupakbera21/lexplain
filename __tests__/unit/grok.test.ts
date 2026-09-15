@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/unit/grok.test.ts
 // Unit tests for lib/grok.ts — isGrokConfigured, streamGrok,
 // generateGrokJSON. Fetch is mocked.
@@ -10,34 +10,34 @@ global.fetch = mockFetch;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: XAI_API_KEY present
-  process.env.XAI_API_KEY = "test-xai-key";
+  // Default: GROK_API_KEY present
+  process.env.GROK_API_KEY = "test-grok-key";
 });
 
 afterEach(() => {
-  delete process.env.XAI_API_KEY;
+  delete process.env.GROK_API_KEY;
 });
 
 import { isGrokConfigured, generateGrokJSON } from "@/lib/grok";
 
 describe("isGrokConfigured", () => {
-  it("returns true when XAI_API_KEY is set", () => {
-    process.env.XAI_API_KEY = "some-key";
+  it("returns true when GROK_API_KEY is set", () => {
+    process.env.GROK_API_KEY = "some-key";
     expect(isGrokConfigured()).toBe(true);
   });
 
-  it("returns false when XAI_API_KEY is not set", () => {
-    delete process.env.XAI_API_KEY;
+  it("returns false when GROK_API_KEY is not set", () => {
+    delete process.env.GROK_API_KEY;
     expect(isGrokConfigured()).toBe(false);
   });
 
-  it("returns false when XAI_API_KEY is empty string", () => {
-    process.env.XAI_API_KEY = "";
+  it("returns false when GROK_API_KEY is empty string", () => {
+    process.env.GROK_API_KEY = "";
     expect(isGrokConfigured()).toBe(false);
   });
 
-  it("returns false when XAI_API_KEY is whitespace only", () => {
-    process.env.XAI_API_KEY = "   ";
+  it("returns false when GROK_API_KEY is whitespace only", () => {
+    process.env.GROK_API_KEY = "   ";
     expect(isGrokConfigured()).toBe(false);
   });
 });
@@ -58,19 +58,18 @@ describe("generateGrokJSON", () => {
 
   it("strips markdown code fences before parsing", async () => {
     const payload = { key: "value" };
-    const withFences = `\`\`\`json\n${JSON.stringify(payload)}\n\`\`\``;
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: withFences } }],
+        choices: [{ message: { content: "```json\n" + JSON.stringify(payload) + "\n```" } }],
       }),
     });
 
-    const result = await generateGrokJSON<{ key: string }>("prompt", "system");
-    expect(result.key).toBe("value");
+    const result = await generateGrokJSON("Test prompt", "System prompt");
+    expect(result).toEqual(payload);
   });
 
-  it("throws ApiError when response is not OK", async () => {
+  it("throws when Grok returns non-OK status", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 429,
@@ -81,9 +80,9 @@ describe("generateGrokJSON", () => {
     await expect(generateGrokJSON("prompt", "system")).rejects.toThrow();
   });
 
-  it("throws when XAI_API_KEY is not configured", async () => {
-    delete process.env.XAI_API_KEY;
-    await expect(generateGrokJSON("prompt", "system")).rejects.toThrow("XAI_API_KEY is not configured");
+  it("throws when GROK_API_KEY is not configured", async () => {
+    delete process.env.GROK_API_KEY;
+    await expect(generateGrokJSON("prompt", "system")).rejects.toThrow("GROK_API_KEY is not configured");
   });
 
   it("throws ApiError when JSON parsing fails", async () => {
@@ -113,10 +112,10 @@ describe("generateGrokJSON", () => {
 });
 
 describe("streamGrok", () => {
-  it("throws when XAI_API_KEY is not configured", async () => {
-    delete process.env.XAI_API_KEY;
+  it("throws when GROK_API_KEY is not configured", async () => {
+    delete process.env.GROK_API_KEY;
     const { streamGrok } = await import("@/lib/grok");
-    await expect(streamGrok("prompt")).rejects.toThrow("XAI_API_KEY is not configured");
+    await expect(streamGrok("prompt")).rejects.toThrow("GROK_API_KEY is not configured");
   });
 
   it("throws when Grok returns non-OK status", async () => {

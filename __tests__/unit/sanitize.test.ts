@@ -2,7 +2,13 @@
 // __tests__/unit/sanitize.test.ts — Unit tests for sanitize.ts
 // ============================================================
 
-import { sanitizeForPrompt, truncateToMaxChars, prepareDocumentForPrompt } from "@/lib/sanitize";
+import {
+  sanitizeForPrompt,
+  truncateToMaxChars,
+  prepareDocumentForPrompt,
+  cleanMarkdownArtifacts,
+  cleanObjectMarkdownArtifacts,
+} from "@/lib/sanitize";
 
 describe("sanitizeForPrompt", () => {
   it("passes through normal legal document text unchanged", () => {
@@ -103,3 +109,59 @@ describe("prepareDocumentForPrompt", () => {
     expect(result.length).toBeLessThan(text.length);
   });
 });
+
+describe("cleanMarkdownArtifacts", () => {
+  it("removes ** bold markers while keeping text intact", () => {
+    const raw = "**Summary:** The **Employee** agrees to maintain confidentiality.";
+    expect(cleanMarkdownArtifacts(raw)).toBe("Summary: The Employee agrees to maintain confidentiality.");
+  });
+
+  it("removes stray/unclosed ** syntax", () => {
+    const raw = "**This is a header without closing bold";
+    expect(cleanMarkdownArtifacts(raw)).toBe("This is a header without closing bold");
+  });
+
+  it("removes horizontal rule divider lines (--- or -- alone on a line)", () => {
+    const raw = "Section 1\n---\nSection 2\n----\nSection 3";
+    const cleaned = cleanMarkdownArtifacts(raw);
+    expect(cleaned).not.toContain("---");
+    expect(cleaned).toContain("Section 1");
+    expect(cleaned).toContain("Section 2");
+    expect(cleaned).toContain("Section 3");
+  });
+
+  it("removes standalone ad-hoc -- and --- separators surrounded by spaces", () => {
+    const raw = "Clause 1 --- Explanation of clause -- Additional note";
+    expect(cleanMarkdownArtifacts(raw)).toBe("Clause 1 Explanation of clause Additional note");
+  });
+
+  it("preserves standard hyphens inside hyphenated words", () => {
+    const raw = "Non-disclosure agreement for a part-time, third-party contractor.";
+    expect(cleanMarkdownArtifacts(raw)).toBe("Non-disclosure agreement for a part-time, third-party contractor.");
+  });
+});
+
+describe("cleanObjectMarkdownArtifacts", () => {
+  it("cleans markdown artifacts recursively in nested objects and arrays", () => {
+    const input = {
+      title: "**Confidentiality**",
+      items: [
+        { desc: "Item 1 --- Details", flag: "**High**" },
+        { desc: "Item 2 -- Normal", flag: "Low" },
+      ],
+      empty: null,
+      count: 42,
+    };
+    const output = cleanObjectMarkdownArtifacts(input);
+    expect(output).toEqual({
+      title: "Confidentiality",
+      items: [
+        { desc: "Item 1 Details", flag: "High" },
+        { desc: "Item 2 Normal", flag: "Low" },
+      ],
+      empty: null,
+      count: 42,
+    });
+  });
+});
+

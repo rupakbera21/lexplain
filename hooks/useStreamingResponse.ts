@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { ApiError } from "@/types";
+import { cleanMarkdownArtifacts } from "@/lib/sanitize";
 
 interface StreamingState {
   text: string;
@@ -114,7 +115,7 @@ export function useStreamingResponse() {
 
             if (parsed.text) {
               accumulated += parsed.text;
-              setState((prev) => ({ ...prev, text: accumulated }));
+              setState((prev) => ({ ...prev, text: cleanMarkdownArtifacts(accumulated) }));
             }
           } catch {
             // Ignore malformed SSE chunks

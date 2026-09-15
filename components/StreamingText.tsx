@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cleanMarkdownArtifacts } from "@/lib/sanitize";
 
 interface StreamingTextProps {
   text: string;
@@ -29,6 +30,8 @@ function parseInline(str: string): string {
     .replace(/`([^`]+)`/g, (_m, code) => `<code>${escapeHtml(code)}</code>`)
     // Bold: **text**
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    // Any stray/unclosed bold markers
+    .replace(/\*\*/g, "")
     // Italic: *text* or _text_
     .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>")
     .replace(/(?<!_)_([^_\n]+)_(?!_)/g, "<em>$1</em>");
@@ -41,8 +44,11 @@ function parseInline(str: string): string {
 function renderLegalMarkdown(raw: string): string {
   if (!raw) return "";
 
+  // Clean raw markdown syntax artifacts (literal **, ad-hoc -- / --- separators)
+  const cleaned = cleanMarkdownArtifacts(raw);
+
   // Normalize line endings
-  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const lines = cleaned.replace(/\r\n/g, "\n").split("\n");
   const htmlParts: string[] = [];
 
   let i = 0;
