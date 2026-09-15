@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import StreamingText from "./StreamingText";
+import FallbackBadge from "./FallbackBadge";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 
 interface QAPanelProps {
@@ -26,7 +27,7 @@ export default function QAPanel({ documentText }: QAPanelProps) {
   const [history, setHistory] = useState<QAItem[]>([]);
   const currentQuestion = useRef("");
 
-  const { text, isStreaming, isDone, error, startStream } = useStreamingResponse();
+  const { text, isStreaming, isDone, error, viaFallback, startStream } = useStreamingResponse();
   const prevIsDone = useRef(false);
 
   const handleAsk = useCallback(async (q?: string) => {
@@ -179,6 +180,7 @@ export default function QAPanel({ documentText }: QAPanelProps) {
                 Searching document…
               </span>
             )}
+            <FallbackBadge visible={viaFallback && !isStreaming} />
           </div>
           <StreamingText text={text} isStreaming={isStreaming} />
         </div>

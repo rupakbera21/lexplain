@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import FallbackBadge from "./FallbackBadge";
 import { ClauseAnalysis, Clause, ClauseType, Severity, ApiError } from "@/types";
 
 interface ClauseRiskPanelProps {
@@ -137,6 +138,7 @@ export default function ClauseRiskPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [viaFallback, setViaFallback] = useState(false);
 
   const handleAnalyze = useCallback(async () => {
     if (cachedAnalysis && cachedAnalysis.documentHash === documentHash) {
@@ -161,7 +163,10 @@ export default function ClauseRiskPanel({
         return;
       }
 
-      const result = data as ClauseAnalysis;
+      // _via_fallback is injected by generateStructuredJSON when Grok answered
+      const { _via_fallback, ...resultData } = data as ClauseAnalysis & { _via_fallback?: boolean };
+      setViaFallback(Boolean(_via_fallback));
+      const result = resultData as ClauseAnalysis;
       setAnalysis(result);
       onAnalysisComplete(result);
     } catch {
@@ -251,6 +256,12 @@ export default function ClauseRiskPanel({
 
       {analysis && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }} className="animate-fade-up">
+          {/* Provider badge — shown only when Grok answered instead of Gemini */}
+          {viaFallback && (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <FallbackBadge visible={true} />
+            </div>
+          )}
           {/* Risk summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.85rem" }}>
             {(["high", "medium", "low"] as Severity[]).map((sev) => (

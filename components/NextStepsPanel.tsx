@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import FallbackBadge from "./FallbackBadge";
 import { NextStepsResult, Clause, ChecklistItem, ApiError } from "@/types";
 
 interface NextStepsPanelProps {
@@ -58,6 +59,7 @@ export default function NextStepsPanel({ documentText, clauses = [], summary = "
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [activeTab, setActiveTab] = useState<"checklist" | "lawyer" | "redflags">("checklist");
+  const [viaFallback, setViaFallback] = useState(false);
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
@@ -72,7 +74,9 @@ export default function NextStepsPanel({ documentText, clauses = [], summary = "
 
       const data = await res.json();
       if (!res.ok) { setError(data as ApiError); return; }
-      setResult(data as NextStepsResult);
+      const { _via_fallback, ...resultData } = data as NextStepsResult & { _via_fallback?: boolean };
+      setViaFallback(Boolean(_via_fallback));
+      setResult(resultData as NextStepsResult);
     } catch {
       setError({ error: "Couldn't generate the checklist right now — please try again.", errorType: "UNKNOWN", retryable: true });
     } finally {
@@ -148,6 +152,12 @@ export default function NextStepsPanel({ documentText, clauses = [], summary = "
 
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.35rem" }} className="animate-fade-in">
+          {/* Provider badge — shown only when Grok answered instead of Gemini */}
+          {viaFallback && (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <FallbackBadge visible={true} />
+            </div>
+          )}
           {/* Stats row */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.85rem" }}>
             <div className="card" style={{ padding: "1rem 1.25rem", textAlign: "center", background: "#fef2f2", borderColor: "#fecaca" }}>

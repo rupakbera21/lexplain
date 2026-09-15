@@ -12,6 +12,7 @@ interface StreamingState {
   isStreaming: boolean;
   isDone: boolean;
   error: ApiError | null;
+  viaFallback: boolean;
 }
 
 export function useStreamingResponse() {
@@ -20,6 +21,7 @@ export function useStreamingResponse() {
     isStreaming: false,
     isDone: false,
     error: null,
+    viaFallback: false,
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -30,7 +32,7 @@ export function useStreamingResponse() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState({ text: "", isStreaming: true, isDone: false, error: null });
+    setState({ text: "", isStreaming: true, isDone: false, error: null, viaFallback: false });
 
     try {
       const res = await fetch(url, {
@@ -46,7 +48,7 @@ export function useStreamingResponse() {
           errorType: "UNKNOWN" as const,
           retryable: true,
         }));
-        setState({ text: "", isStreaming: false, isDone: false, error: err });
+        setState({ text: "", isStreaming: false, isDone: false, error: err, viaFallback: false });
         return;
       }
 
@@ -57,6 +59,7 @@ export function useStreamingResponse() {
           isStreaming: false,
           isDone: false,
           error: { error: "Streaming not supported.", errorType: "UNKNOWN", retryable: false },
+          viaFallback: false,
         });
         return;
       }
@@ -81,7 +84,12 @@ export function useStreamingResponse() {
           }
 
           try {
-            const parsed = JSON.parse(data) as { text?: string; error?: string; errorType?: string };
+            const parsed = JSON.parse(data) as {
+              text?: string;
+              error?: string;
+              errorType?: string;
+              via_fallback?: boolean;
+            };
 
             if (parsed.error) {
               setState({
@@ -93,8 +101,15 @@ export function useStreamingResponse() {
                   errorType: (parsed.errorType as ApiError["errorType"]) ?? "UNKNOWN",
                   retryable: true,
                 },
+                viaFallback: false,
               });
               return;
+            }
+
+            // via_fallback sentinel — set badge, don't accumulate text
+            if (parsed.via_fallback) {
+              setState((prev) => ({ ...prev, viaFallback: true }));
+              continue;
             }
 
             if (parsed.text) {
@@ -118,13 +133,14 @@ export function useStreamingResponse() {
         isStreaming: false,
         isDone: false,
         error: { error: "Connection error. Please check your network and try again.", errorType: "UNKNOWN", retryable: true },
+        viaFallback: false,
       });
     }
   }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
-    setState({ text: "", isStreaming: false, isDone: false, error: null });
+    setState({ text: "", isStreaming: false, isDone: false, error: null, viaFallback: false });
   }, []);
 
   return { ...state, startStream, reset };

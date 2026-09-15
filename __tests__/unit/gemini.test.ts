@@ -172,3 +172,145 @@ describe("generateEmbeddings concurrency behavior", () => {
     expect(result).toHaveLength(0);
   });
 });
+
+// ── Quota-specific Grok fallback (Part 4 — audit fix tests) ───
+// These tests verify the new discriminating fallback behavior:
+// - RATE_LIMIT (429/quota) errors → Grok fallback triggered
+// - INVALID_INPUT (400) errors   → Grok fallback NOT triggered (throws honest error)
+
+describe("generateStreamingResponse — quota-specific Grok fallback", () => {
+  const mockFetch = jest.fn();
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.GEMINI_API_KEY = "test-mock-gemini-key";
+    process.env.XAI_API_KEY = "test-mock-xai-key";
+    global.fetch = mockFetch;
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    delete process.env.XAI_API_KEY;
+  });
+
+  it("falls back to Grok (streaming) when Gemini throws a 429 quota error", async () => {
+    jest.mock("@google/generative-ai", () => ({
+      GoogleGenerativeAI: jest.fn(() => ({
+        getGenerativeModel: jest.fn(() => ({
+          generateContentStream: jest.fn().mockRejectedValue(new Error("Request failed with status 429 quota exceeded")),
+        })),
+      })),
+      HarmCategory: {},
+      HarmBlockThreshold: {},
+    }));
+
+    // Mock Grok streaming response
+    const encoder = new TextEncoder();
+    const sseChunk = `data: ${JSON.stringify({ choices: [{ delta: { content: "fallback answer" } }] })}\n\ndata: [DONE]\n\n`;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(encoder.encode(sseChunk));
+          ctrl.close();
+        },
+      }),
+    });
+
+    const { generateStreamingResponse } = await import("@/lib/gemini");
+    const stream = await generateStreamingResponse("test prompt");
+    expect(stream).toBeInstanceOf(ReadableStream);
+
+    // Drain and verify via_fallback sentinel is first event
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let fullOutput = "";
+    let done = false;
+    while (!done) {
+      const { value, done: d } = await reader.read();
+      done = d;
+      if (value) fullOutput += decoder.decode(value);
+    }
+    expect(fullOutput).toContain('"via_fallback":true');
+    expect(fullOutput).toContain('"text":"fallback answer"');
+  });
+
+  it("does NOT fall back to Grok (streaming) when Gemini throws an INVALID_INPUT (400) error", async () => {
+    jest.mock("@google/generative-ai", () => ({
+      GoogleGenerativeAI: jest.fn(() => ({
+        getGenerativeModel: jest.fn(() => ({
+          generateContentStream: jest.fn().mockRejectedValue(new Error("400 invalid request — bad content")),
+        })),
+      })),
+      HarmCategory: {},
+      HarmBlockThreshold: {},
+    }));
+
+    const { generateStreamingResponse } = await import("@/lib/gemini");
+    // Should throw — Grok should NOT be called
+    await expect(generateStreamingResponse("bad prompt")).rejects.toBeDefined();
+    // fetch (Grok) must NOT have been called
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateStructuredJSON — quota-specific Grok fallback", () => {
+  const mockFetch = jest.fn();
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.GEMINI_API_KEY = "test-mock-gemini-key";
+    process.env.XAI_API_KEY = "test-mock-xai-key";
+    global.fetch = mockFetch;
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    delete process.env.XAI_API_KEY;
+  });
+
+  it("falls back to Grok (JSON) when Gemini throws a quota (429) error and attaches _via_fallback marker", async () => {
+    jest.mock("@google/generative-ai", () => ({
+      GoogleGenerativeAI: jest.fn(() => ({
+        getGenerativeModel: jest.fn(() => ({
+          generateContent: jest.fn().mockRejectedValue(new Error("429 RESOURCE_EXHAUSTED quota exceeded")),
+        })),
+      })),
+      HarmCategory: {},
+      HarmBlockThreshold: {},
+    }));
+
+    const grokPayload = { summary: "Grok answer", clauses: [] };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(grokPayload) } }],
+      }),
+    });
+
+    const { generateStructuredJSON } = await import("@/lib/gemini");
+    const result = await generateStructuredJSON<typeof grokPayload>("prompt", "system");
+    expect(result.summary).toBe("Grok answer");
+    // Fallback marker must be present
+    expect((result as Record<string, unknown>)._via_fallback).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT fall back to Grok (JSON) when Gemini throws an INVALID_INPUT (400) error", async () => {
+    jest.mock("@google/generative-ai", () => ({
+      GoogleGenerativeAI: jest.fn(() => ({
+        getGenerativeModel: jest.fn(() => ({
+          generateContent: jest.fn().mockRejectedValue(new Error("400 invalid request body")),
+        })),
+      })),
+      HarmCategory: {},
+      HarmBlockThreshold: {},
+    }));
+
+    const { generateStructuredJSON } = await import("@/lib/gemini");
+    await expect(generateStructuredJSON("bad prompt", "system")).rejects.toBeDefined();
+    // Grok (fetch) must NOT have been called
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+

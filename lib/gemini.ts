@@ -84,10 +84,21 @@ export function getEmbeddingModel(): GenerativeModel {
 type GeminiErrorType = ApiError["errorType"];
 
 function classifyError(err: unknown): { type: GeminiErrorType; message: string; retryable: boolean } {
+  // Fast-path: if this is already a typed ApiError thrown by callWithRetry,
+  // re-use its errorType directly instead of trying to string-inspect it.
+  if (err !== null && typeof err === "object" && "errorType" in err) {
+    const apiErr = err as ApiError;
+    return {
+      type: apiErr.errorType,
+      message: apiErr.error ?? "An error occurred.",
+      retryable: apiErr.retryable ?? false,
+    };
+  }
+
   const message = err instanceof Error ? err.message : String(err);
   const lower = message.toLowerCase();
 
-  if (lower.includes("429") || lower.includes("quota") || lower.includes("rate limit")) {
+  if (lower.includes("429") || lower.includes("quota") || lower.includes("rate limit") || lower.includes("resource_exhausted")) {
     return { type: "RATE_LIMIT", message: "API quota exceeded — please try again in a moment.", retryable: true };
   }
   if (lower.includes("503") || lower.includes("unavailable") || lower.includes("overloaded")) {
@@ -174,7 +185,9 @@ export async function callWithRetry<T>(
 /**
  * Generates a streaming response and converts it to a ReadableStream
  * suitable for use as a Next.js streaming API response (SSE).
- * Automatically falls back to Grok (xAI) if Gemini fails or is unavailable.
+ * Falls back to Grok (xAI) ONLY on quota/rate-limit errors (RATE_LIMIT).
+ * Other error types (INVALID_INPUT, auth failures) surface honestly — routing
+ * those to Grok would not help and would mask real bugs.
  */
 export async function generateStreamingResponse(
   prompt: string,
@@ -217,9 +230,32 @@ export async function generateStreamingResponse(
       },
     });
   } catch (geminiErr) {
-    if (isGrokConfigured()) {
-      console.warn("[Lexplain] Gemini streaming call failed, falling back to Grok (xAI):", geminiErr);
-      return streamGrok(prompt, systemPrompt);
+    // Only fall back to Grok for quota/rate-limit errors — not for invalid input,
+    // auth failures, or other permanent errors that Grok won't resolve either.
+    const classified = classifyError(geminiErr);
+    if (classified.type === "RATE_LIMIT" && isGrokConfigured()) {
+      console.warn(
+        "[Lexplain] Gemini quota exceeded, falling back to Grok (xAI). ",
+        "Note: embedding-path quota exhaustion cannot fall back to Grok (no compatible endpoint)."
+      );
+      // Prepend a via_fallback sentinel so the client can show the subtle badge.
+      const grokStream = await streamGrok(prompt, systemPrompt);
+      const encoder = new TextEncoder();
+      return new ReadableStream({
+        async start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ via_fallback: true })}\n\n`));
+          const reader = grokStream.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              controller.enqueue(value);
+            }
+          } finally {
+            controller.close();
+          }
+        },
+      });
     }
     throw geminiErr;
   }
@@ -230,7 +266,11 @@ export async function generateStreamingResponse(
 /**
  * Generates structured JSON output using Gemini's response schema feature.
  * Used for clause extraction and document comparison.
- * Automatically falls back to Grok (xAI) if Gemini fails or is unavailable.
+ * Falls back to Grok (xAI) ONLY on quota/rate-limit errors (RATE_LIMIT).
+ * Other error types (INVALID_INPUT, auth failures) surface honestly.
+ *
+ * When Grok handles the request, the returned object has `_via_fallback: true`
+ * attached (via Object.assign) so calling components can show the subtle badge.
  */
 export async function generateStructuredJSON<T>(
   prompt: string,
@@ -266,9 +306,16 @@ export async function generateStructuredJSON<T>(
       } as ApiError;
     }
   } catch (geminiErr) {
-    if (isGrokConfigured()) {
-      console.warn("[Lexplain] Gemini JSON call failed, falling back to Grok (xAI):", geminiErr);
-      return generateGrokJSON<T>(prompt, systemPrompt);
+    // Only fall back to Grok for quota/rate-limit errors — not for invalid input,
+    // auth failures, or other permanent errors that Grok won't resolve either.
+    const classified = classifyError(geminiErr);
+    if (classified.type === "RATE_LIMIT" && isGrokConfigured()) {
+      console.warn("[Lexplain] Gemini quota exceeded for structured JSON, falling back to Grok (xAI).");
+      const result = await generateGrokJSON<T>(prompt, systemPrompt);
+      // Attach fallback marker so calling components can surface the subtle badge.
+      // Object.assign avoids the T & {_via_fallback} intersection type constraint.
+      Object.assign(result as object, { _via_fallback: true });
+      return result;
     }
     throw geminiErr;
   }

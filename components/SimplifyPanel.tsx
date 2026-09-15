@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import StreamingText from "./StreamingText";
+import FallbackBadge from "./FallbackBadge";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 import { ReadingLevel } from "@/types";
 
@@ -17,7 +18,7 @@ const LEVEL_LABELS: Record<ReadingLevel, { label: string; desc: string; icon: st
 
 export default function SimplifyPanel({ documentText }: SimplifyPanelProps) {
   const [level, setLevel] = useState<ReadingLevel>("standard");
-  const { text, isStreaming, isDone, error, startStream, reset } = useStreamingResponse();
+  const { text, isStreaming, isDone, error, viaFallback, startStream, reset } = useStreamingResponse();
 
   const handleAnalyze = useCallback(async () => {
     await startStream("/api/simplify", { text: documentText, level });
@@ -154,6 +155,7 @@ export default function SimplifyPanel({ documentText }: SimplifyPanelProps) {
                 ✓ Complete
               </span>
             )}
+            <FallbackBadge visible={isDone && viaFallback} />
           </div>
           <StreamingText text={text} isStreaming={isStreaming} />
         </div>

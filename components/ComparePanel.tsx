@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import FallbackBadge from "./FallbackBadge";
 import DocumentUploader from "./DocumentUploader";
 import { ComparisonResult, ComparisonItem, ApiError } from "@/types";
 
@@ -74,6 +75,7 @@ export default function ComparePanel({ primaryText, primaryName }: ComparePanelP
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [filterSig, setFilterSig] = useState<"all" | "major" | "moderate" | "minor">("all");
+  const [viaFallback, setViaFallback] = useState(false);
 
   const handleCompare = useCallback(async () => {
     if (!secondaryText) return;
@@ -94,7 +96,9 @@ export default function ComparePanel({ primaryText, primaryName }: ComparePanelP
 
       const data = await res.json();
       if (!res.ok) { setError(data as ApiError); return; }
-      setResult(data as ComparisonResult);
+      const { _via_fallback, ...resultData } = data as ComparisonResult & { _via_fallback?: boolean };
+      setViaFallback(Boolean(_via_fallback));
+      setResult(resultData as ComparisonResult);
     } catch {
       setError({ error: "Couldn't compare the documents right now — please try again.", errorType: "UNKNOWN", retryable: true });
     } finally {
@@ -252,6 +256,12 @@ export default function ComparePanel({ primaryText, primaryName }: ComparePanelP
 
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} className="animate-fade-up">
+          {/* Provider badge — shown only when Grok answered instead of Gemini */}
+          {viaFallback && (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <FallbackBadge visible={true} />
+            </div>
+          )}
           {/* Executive Summary Cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem" }}>
             <div className="summary-card-diff">
