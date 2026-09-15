@@ -143,6 +143,11 @@ describe("generateEmbeddings concurrency behavior", () => {
           embedContent: jest.fn().mockResolvedValue({
             embedding: { values: [0.1, 0.2, 0.3] },
           }),
+          batchEmbedContents: jest.fn((args: { requests: { content: unknown }[] }) =>
+            Promise.resolve({
+              embeddings: args.requests.map(() => ({ values: [0.1, 0.2, 0.3] })),
+            })
+          ),
         })),
       })),
       HarmCategory: {},

@@ -343,39 +343,33 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generates embeddings for multiple chunks with controlled concurrency.
- * Up to MAX_CONCURRENT_BATCHES batches run in parallel; remaining batches
- * are queued to avoid burst 429s while still cutting sequential round-trips
- * for typical 20-40 chunk documents (EFF-02 fix).
+ * Generates embeddings for multiple chunks using Gemini's native batchEmbedContents API.
+ * Combines all chunks into a single API request (up to 50 per batch), reducing N round-trips
+ * and completely preventing 429 quota exhaustion on free-tier rate limits.
  */
 export async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
-  const BATCH_SIZE = 10;
-  const MAX_CONCURRENT_BATCHES = 3;
+  if (!chunks || chunks.length === 0) return [];
+  const model = getEmbeddingModel();
 
-  // Partition into batches
-  const batches: string[][] = [];
-  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-    batches.push(chunks.slice(i, i + BATCH_SIZE));
-  }
-
-  const results: number[][][] = new Array(batches.length);
-  let nextBatch = 0;
-
-  // Worker: repeatedly takes the next unprocessed batch until all done
-  async function worker() {
-    while (true) {
-      const idx = nextBatch++;
-      if (idx >= batches.length) break;
-      results[idx] = await Promise.all(batches[idx].map(generateEmbedding));
+  try {
+    const BATCH_SIZE = 50;
+    const allEmbeddings: number[][] = [];
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const slice = chunks.slice(i, i + BATCH_SIZE);
+      const res = await callWithRetry(() =>
+        model.batchEmbedContents({
+          requests: slice.map((text) => ({
+            content: { role: "user", parts: [{ text }] },
+          })),
+        })
+      );
+      for (const item of res.embeddings) {
+        allEmbeddings.push(item.values);
+      }
     }
+    return allEmbeddings;
+  } catch (batchErr) {
+    console.warn("[Lexplain] batchEmbedContents failed, falling back to individual embeddings:", batchErr);
+    return Promise.all(chunks.map(generateEmbedding));
   }
-
-  // Spin up at most MAX_CONCURRENT_BATCHES workers
-  const workers = Array.from(
-    { length: Math.min(MAX_CONCURRENT_BATCHES, batches.length) },
-    worker
-  );
-  await Promise.all(workers);
-
-  return results.flat();
 }

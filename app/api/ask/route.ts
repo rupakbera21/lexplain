@@ -54,13 +54,17 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
   try {
     // ── Build or use cached chunks + embeddings ───────────────
     const chunks = providedChunks ?? chunkDocument(sanitizedText);
-    const chunkEmbeddings = providedEmbeddings ?? (await generateEmbeddings(chunks));
+    let topChunks: { chunk: string; score: number }[] = [];
 
-    // ── Embed the query ───────────────────────────────────────
-    const queryEmbedding = await generateEmbedding(sanitizedQuestion);
-
-    // ── Retrieve top-k relevant chunks ────────────────────────
-    const topChunks = retrieveTopKChunks(queryEmbedding, chunkEmbeddings, chunks, 5, 0.4);
+    try {
+      const chunkEmbeddings = providedEmbeddings ?? (await generateEmbeddings(chunks));
+      const queryEmbedding = await generateEmbedding(sanitizedQuestion);
+      topChunks = retrieveTopKChunks(queryEmbedding, chunkEmbeddings, chunks, 5, 0.4);
+    } catch (embedErr) {
+      console.warn("[Lexplain:Ask] Embedding retrieval failed or rate-limited, falling back to document context:", embedErr);
+      // Resilient fallback: if embeddings hit quota, select document chunks directly so user request always succeeds
+      topChunks = chunks.slice(0, 5).map((c) => ({ chunk: c, score: 0.8 }));
+    }
 
     // ── Build grounded prompt ─────────────────────────────────
     let prompt: string;
