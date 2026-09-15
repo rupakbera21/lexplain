@@ -234,13 +234,13 @@ export async function generateStreamingResponse(
       },
     });
   } catch (geminiErr) {
-    // Only fall back to Grok for quota/rate-limit errors — not for invalid input,
-    // auth failures, or other permanent errors that Grok won't resolve either.
+    // Fall back to Groq for quota/rate-limit errors or service unavailability (503 / overload / timeout)
+    // Permanent errors (INVALID_INPUT, auth failures) still surface honestly.
     const classified = classifyError(geminiErr);
-    if (classified.type === "RATE_LIMIT" && isGrokConfigured()) {
+    if ((classified.type === "RATE_LIMIT" || classified.type === "SERVICE_UNAVAILABLE") && isGrokConfigured()) {
       console.warn(
-        "[Lexplain] Gemini quota exceeded, falling back to Grok (xAI). ",
-        "Note: embedding-path quota exhaustion cannot fall back to Grok (no compatible endpoint)."
+        `[Lexplain] Gemini ${classified.type} (${classified.message}), falling back to Groq. `,
+        "Note: embedding-path quota exhaustion cannot fall back to Groq (no compatible endpoint)."
       );
       // Prepend a via_fallback sentinel so the client can show the subtle badge.
       const grokStream = await streamGrok(prompt, systemPrompt);
@@ -311,11 +311,11 @@ export async function generateStructuredJSON<T>(
       } as ApiError;
     }
   } catch (geminiErr) {
-    // Only fall back to Grok for quota/rate-limit errors — not for invalid input,
-    // auth failures, or other permanent errors that Grok won't resolve either.
+    // Fall back to Groq for quota/rate-limit errors or service unavailability (503 / overload / timeout)
+    // Permanent errors (INVALID_INPUT, auth failures) still surface honestly.
     const classified = classifyError(geminiErr);
-    if (classified.type === "RATE_LIMIT" && isGrokConfigured()) {
-      console.warn("[Lexplain] Gemini quota exceeded for structured JSON, falling back to Grok (xAI).");
+    if ((classified.type === "RATE_LIMIT" || classified.type === "SERVICE_UNAVAILABLE") && isGrokConfigured()) {
+      console.warn(`[Lexplain] Gemini ${classified.type}, falling back to Groq for structured JSON.`);
       const result = await generateGrokJSON<T>(prompt, systemPrompt);
       // Attach fallback marker so calling components can surface the subtle badge.
       // Object.assign avoids the T & {_via_fallback} intersection type constraint.

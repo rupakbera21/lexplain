@@ -1,27 +1,32 @@
 // ============================================================
-// lib/grok.ts — xAI (Grok) Fallback Client for Lexplain
-// Automatically activated if Gemini API fails or runs out of quota.
-// Read GROK_API_KEY from server-side env vars only.
+// lib/grok.ts — Groq (LPU) Fallback Client for Lexplain
+// Automatically activated if Gemini API fails, runs out of quota, or is unavailable.
+// Reads GROQ_API_KEY (or GROK_API_KEY) from server-side env vars only.
 // ============================================================
 
 import { ApiError } from "@/types";
 import { cleanMarkdownArtifacts, cleanObjectMarkdownArtifacts } from "@/lib/sanitize";
 
-const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const GROK_MODEL = "grok-2-latest";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
+
+function getApiKey(): string | undefined {
+  return process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+}
 
 export function isGrokConfigured(): boolean {
-  return Boolean(process.env.GROK_API_KEY && process.env.GROK_API_KEY.trim().length > 0);
+  const key = getApiKey();
+  return Boolean(key && key.trim().length > 0);
 }
 
 /**
- * Stream responses from Grok (xAI) via Server-Sent Events (SSE).
+ * Stream responses from Groq via Server-Sent Events (SSE).
  */
 export async function streamGrok(
   prompt: string,
   systemPrompt?: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const apiKey = process.env.GROK_API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error("GROK_API_KEY is not configured for Grok fallback.");
   }
@@ -31,14 +36,14 @@ export async function streamGrok(
     { role: "user", content: prompt },
   ];
 
-  const response = await fetch(XAI_API_URL, {
+  const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GROK_MODEL,
+      model: GROQ_MODEL,
       messages,
       stream: true,
       temperature: 0.2,
@@ -126,7 +131,7 @@ export async function generateGrokJSON<T>(
   prompt: string,
   systemPrompt: string
 ): Promise<T> {
-  const apiKey = process.env.GROK_API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error("GROK_API_KEY is not configured for Grok fallback.");
   }
@@ -139,14 +144,14 @@ export async function generateGrokJSON<T>(
     { role: "user", content: prompt },
   ];
 
-  const response = await fetch(XAI_API_URL, {
+  const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GROK_MODEL,
+      model: GROQ_MODEL,
       messages,
       temperature: 0.1,
       response_format: { type: "json_object" },
