@@ -55,7 +55,7 @@ export function getFlashModel(): GenerativeModel {
       );
     }
     _flashModel = new GoogleGenerativeAI(key).getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: process.env.GEMINI_MODEL || "gemini-3.6-flash",
       safetySettings: SAFETY_SETTINGS,
     });
   }
