@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import StreamingText from "./StreamingText";
 import FallbackBadge from "./FallbackBadge";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 import { ReadingLevel } from "@/types";
 
+export interface SimplifyCacheEntry {
+  text: string;
+  viaFallback: boolean;
+}
+
 interface SimplifyPanelProps {
   documentText: string;
+  cachedResults?: Partial<Record<ReadingLevel, SimplifyCacheEntry>> | null;
+  onResultComplete?: (level: ReadingLevel, result: SimplifyCacheEntry) => void;
 }
 
 const LEVEL_LABELS: Record<ReadingLevel, { label: string; desc: string; icon: string }> = {
@@ -16,9 +23,25 @@ const LEVEL_LABELS: Record<ReadingLevel, { label: string; desc: string; icon: st
   detailed: { label: "Detailed", desc: "Deep analytical view with nuance preserved", icon: "🔍" },
 };
 
-export default function SimplifyPanel({ documentText }: SimplifyPanelProps) {
+export default function SimplifyPanel({
+  documentText,
+  cachedResults,
+  onResultComplete,
+}: SimplifyPanelProps) {
   const [level, setLevel] = useState<ReadingLevel>("standard");
   const { text, isStreaming, isDone, error, viaFallback, startStream, reset } = useStreamingResponse();
+  const prevIsDone = useRef(false);
+
+  const cachedForLevel = cachedResults?.[level];
+  const activeText = text || (cachedForLevel?.text ?? "");
+  const activeDone = isDone || Boolean(cachedForLevel?.text);
+  const activeFallback = viaFallback || Boolean(cachedForLevel?.viaFallback);
+
+  if (isDone && !prevIsDone.current && text) {
+    prevIsDone.current = true;
+    onResultComplete?.(level, { text, viaFallback });
+  }
+  if (!isDone) prevIsDone.current = false;
 
   const handleAnalyze = useCallback(async () => {
     await startStream("/api/simplify", { text: documentText, level });
@@ -137,7 +160,7 @@ export default function SimplifyPanel({ documentText }: SimplifyPanelProps) {
       )}
 
       {/* Output */}
-      {(text || isStreaming) && (
+      {(activeText || isStreaming) && (
         <div className="card animate-fade-up" style={{ padding: "1.75rem", backgroundColor: "#ffffff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.25rem", paddingBottom: "1rem", borderBottom: "1px solid var(--color-border)" }}>
             <span style={{ fontSize: "1.2rem" }} aria-hidden="true">{LEVEL_LABELS[level].icon}</span>
@@ -150,14 +173,14 @@ export default function SimplifyPanel({ documentText }: SimplifyPanelProps) {
                 Streaming…
               </span>
             )}
-            {isDone && (
+            {activeDone && (
               <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "var(--color-right)", fontWeight: 600 }}>
                 ✓ Complete
               </span>
             )}
-            <FallbackBadge visible={isDone && viaFallback} />
+            <FallbackBadge visible={activeDone && activeFallback} />
           </div>
-          <StreamingText text={text} isStreaming={isStreaming} />
+          <StreamingText text={activeText} isStreaming={isStreaming} />
         </div>
       )}
     </section>

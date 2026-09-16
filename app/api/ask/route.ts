@@ -55,9 +55,13 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
     // ── Build or use cached chunks + embeddings ───────────────
     const chunks = providedChunks ?? chunkDocument(sanitizedText);
     let topChunks: { chunk: string; score: number }[] = [];
+    let computedEmbeddings: number[][] | null = null;
 
     try {
       const chunkEmbeddings = providedEmbeddings ?? (await generateEmbeddings(chunks));
+      if (!providedEmbeddings && chunkEmbeddings.length > 0) {
+        computedEmbeddings = chunkEmbeddings;
+      }
       const queryEmbedding = await generateEmbedding(sanitizedQuestion);
       topChunks = retrieveTopKChunks(queryEmbedding, chunkEmbeddings, chunks, 5, 0.4);
     } catch (embedErr) {
@@ -106,7 +110,36 @@ Answer based ONLY on the context above. Cite your sources using [Context N] nota
     // ── Stream the grounded answer ────────────────────────────
     const stream = await generateStreamingResponse(prompt, systemPrompt);
 
-    return new Response(stream, {
+    // If chunks/embeddings were freshly computed, prepend them as a meta SSE event
+    // so client can cache them and avoid re-embedding on subsequent questions
+    let responseStream = stream;
+    if (!providedChunks && computedEmbeddings && computedEmbeddings.length > 0) {
+      const encoder = new TextEncoder();
+      const metaEvent = encoder.encode(`data: ${JSON.stringify({ meta: { chunks, embeddings: computedEmbeddings } })}\n\n`);
+      const reader = stream.getReader();
+      let sentMeta = false;
+
+      responseStream = new ReadableStream({
+        async pull(controller) {
+          if (!sentMeta) {
+            sentMeta = true;
+            controller.enqueue(metaEvent);
+            return;
+          }
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+          } else {
+            controller.enqueue(value);
+          }
+        },
+        cancel(reason) {
+          return reader.cancel(reason);
+        },
+      });
+    }
+
+    return new Response(responseStream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",

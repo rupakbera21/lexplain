@@ -5,12 +5,21 @@ import Image from "next/image";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import AccessibilityToolbar from "@/components/AccessibilityToolbar";
 import DocumentUploader from "@/components/DocumentUploader";
-import SimplifyPanel from "@/components/SimplifyPanel";
-import ClauseRiskPanel from "@/components/ClauseRiskPanel";
-import ComparePanel from "@/components/ComparePanel";
-import QAPanel from "@/components/QAPanel";
-import NextStepsPanel from "@/components/NextStepsPanel";
-import { ClauseAnalysis, ApiError } from "@/types";
+import dynamic from "next/dynamic";
+import type { SimplifyCacheEntry } from "@/components/SimplifyPanel";
+import type { CompareCacheEntry } from "@/components/ComparePanel";
+import type { QAItem } from "@/components/QAPanel";
+import { ClauseAnalysis, NextStepsResult, ApiError, ReadingLevel } from "@/types";
+
+const panelLoading = () => (
+  <div className="animate-pulse" style={{ height: "180px", background: "var(--color-surface-2)", borderRadius: "8px" }} />
+);
+
+const SimplifyPanel = dynamic(() => import("@/components/SimplifyPanel"), { loading: panelLoading });
+const ClauseRiskPanel = dynamic(() => import("@/components/ClauseRiskPanel"), { loading: panelLoading });
+const ComparePanel = dynamic(() => import("@/components/ComparePanel"), { loading: panelLoading });
+const QAPanel = dynamic(() => import("@/components/QAPanel"), { loading: panelLoading });
+const NextStepsPanel = dynamic(() => import("@/components/NextStepsPanel"), { loading: panelLoading });
 
 type TabId = "simplify" | "clauses" | "compare" | "ask" | "nextsteps";
 
@@ -37,6 +46,12 @@ export default function Home() {
   const [uploadError, setUploadError]     = useState<ApiError | null>(null);
   const [activeTab, setActiveTab]         = useState<TabId>("simplify");
   const [analysisCache, setAnalysisCache] = useState<ClauseAnalysis | null>(null);
+  const [simplifyCache, setSimplifyCache] = useState<Partial<Record<ReadingLevel, SimplifyCacheEntry>>>({});
+  const [nextStepsCache, setNextStepsCache] = useState<{ result: NextStepsResult; viaFallback: boolean } | null>(null);
+  const [compareCache, setCompareCache]   = useState<CompareCacheEntry | null>(null);
+  const [qaHistory, setQaHistory]         = useState<QAItem[]>([]);
+  const [qaChunks, setQaChunks]           = useState<string[] | null>(null);
+  const [qaEmbeddings, setQaEmbeddings]   = useState<number[][] | null>(null);
   const [logoError, setLogoError]         = useState(false);
 
   const handleDocumentLoaded = useCallback((text: string, name: string, hash: string) => {
@@ -46,6 +61,12 @@ export default function Home() {
     setDocumentHash(hash);
     setUploadError(null);
     setAnalysisCache(null);
+    setSimplifyCache({});
+    setNextStepsCache(null);
+    setCompareCache(null);
+    setQaHistory([]);
+    setQaChunks(null);
+    setQaEmbeddings(null);
     setActiveTab("simplify");
   }, []);
 
@@ -55,6 +76,12 @@ export default function Home() {
     setDocumentHash(null);
     setUploadError(null);
     setAnalysisCache(null);
+    setSimplifyCache({});
+    setNextStepsCache(null);
+    setCompareCache(null);
+    setQaHistory([]);
+    setQaChunks(null);
+    setQaEmbeddings(null);
   }, []);
 
   return (
@@ -316,7 +343,11 @@ export default function Home() {
             <div className="card" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
               {activeTab === "simplify" && (
                 <div role="tabpanel" id="panel-simplify" aria-labelledby="tab-simplify" tabIndex={0}>
-                  <SimplifyPanel documentText={documentText} />
+                  <SimplifyPanel
+                    documentText={documentText}
+                    cachedResults={simplifyCache}
+                    onResultComplete={(lvl, res) => setSimplifyCache((prev) => ({ ...prev, [lvl]: res }))}
+                  />
                 </div>
               )}
               {activeTab === "clauses" && (
@@ -331,12 +362,27 @@ export default function Home() {
               )}
               {activeTab === "compare" && (
                 <div role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabIndex={0}>
-                  <ComparePanel primaryText={documentText} primaryName={documentName} />
+                  <ComparePanel
+                    primaryText={documentText}
+                    primaryName={documentName}
+                    cachedCompare={compareCache}
+                    onCompareComplete={(entry) => setCompareCache(entry)}
+                  />
                 </div>
               )}
               {activeTab === "ask" && (
                 <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" tabIndex={0}>
-                  <QAPanel documentText={documentText} />
+                  <QAPanel
+                    documentText={documentText}
+                    cachedHistory={qaHistory}
+                    onHistoryChange={(h) => setQaHistory(h)}
+                    cachedChunks={qaChunks}
+                    cachedEmbeddings={qaEmbeddings}
+                    onEmbeddingsComputed={(c, e) => {
+                      setQaChunks(c);
+                      setQaEmbeddings(e);
+                    }}
+                  />
                 </div>
               )}
               {activeTab === "nextsteps" && (
@@ -345,6 +391,9 @@ export default function Home() {
                     documentText={documentText}
                     clauses={analysisCache?.clauses}
                     summary={analysisCache?.summary}
+                    cachedResult={nextStepsCache?.result}
+                    cachedViaFallback={nextStepsCache?.viaFallback}
+                    onResultComplete={(res, fb) => setNextStepsCache({ result: res, viaFallback: fb })}
                   />
                 </div>
               )}

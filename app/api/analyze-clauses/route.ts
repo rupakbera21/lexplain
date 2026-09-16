@@ -77,9 +77,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const sanitized = prepareDocumentForPrompt(text);
-  // Hash the sanitized text — same document still maps to the same hash since
-  // sanitization is deterministic, and avoids a second full pass over raw text (EFF-03).
-  const documentHash = hashDocument(sanitized);
+  // Hash the raw input text to match /api/parse, ensuring consistent cache comparison across routes
+  const documentHash = hashDocument(text);
   const prompt = `Analyze the following legal document and extract all significant clauses:\n\n---\n${sanitized}\n---`;
 
   try {

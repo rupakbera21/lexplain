@@ -8,6 +8,9 @@ interface NextStepsPanelProps {
   documentText: string;
   clauses?: Clause[];
   summary?: string;
+  cachedResult?: NextStepsResult | null;
+  cachedViaFallback?: boolean;
+  onResultComplete?: (result: NextStepsResult, viaFallback: boolean) => void;
 }
 
 const PRIORITY_CONFIG = {
@@ -54,12 +57,19 @@ function ChecklistItemCard({ item }: { item: ChecklistItem }) {
   );
 }
 
-export default function NextStepsPanel({ documentText, clauses = [], summary = "" }: NextStepsPanelProps) {
-  const [result, setResult] = useState<NextStepsResult | null>(null);
+export default function NextStepsPanel({
+  documentText,
+  clauses = [],
+  summary = "",
+  cachedResult,
+  cachedViaFallback = false,
+  onResultComplete,
+}: NextStepsPanelProps) {
+  const [result, setResult] = useState<NextStepsResult | null>(cachedResult ?? null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [activeTab, setActiveTab] = useState<"checklist" | "lawyer" | "redflags">("checklist");
-  const [viaFallback, setViaFallback] = useState(false);
+  const [viaFallback, setViaFallback] = useState(cachedViaFallback);
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
@@ -75,14 +85,17 @@ export default function NextStepsPanel({ documentText, clauses = [], summary = "
       const data = await res.json();
       if (!res.ok) { setError(data as ApiError); return; }
       const { _via_fallback, ...resultData } = data as NextStepsResult & { _via_fallback?: boolean };
-      setViaFallback(Boolean(_via_fallback));
-      setResult(resultData as NextStepsResult);
+      const fb = Boolean(_via_fallback);
+      setViaFallback(fb);
+      const resData = resultData as NextStepsResult;
+      setResult(resData);
+      onResultComplete?.(resData, fb);
     } catch {
       setError({ error: "Couldn't generate the checklist right now — please try again.", errorType: "UNKNOWN", retryable: true });
     } finally {
       setIsLoading(false);
     }
-  }, [documentText, clauses, summary]);
+  }, [documentText, clauses, summary, onResultComplete]);
 
   const highPriorityCount = result?.beforeYouSign.filter((i) => i.priority === "high").length ?? 0;
 

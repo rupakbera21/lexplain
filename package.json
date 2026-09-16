@@ -13,10 +13,8 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
-    "@fontsource/playfair-display": "^5.3.0",
     "@fontsource/sora": "^5.3.0",
     "@google/generative-ai": "^0.24.1",
-    "crypto-js": "^4.2.0",
     "mammoth": "^1.12.3",
     "next": "16.3.5",
     "pdf-parse": "^2.4.5",

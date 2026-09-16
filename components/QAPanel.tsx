@@ -5,13 +5,18 @@ import StreamingText from "./StreamingText";
 import FallbackBadge from "./FallbackBadge";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 
-interface QAPanelProps {
-  documentText: string;
-}
-
-interface QAItem {
+export interface QAItem {
   question: string;
   answer: string;
+}
+
+interface QAPanelProps {
+  documentText: string;
+  cachedHistory?: QAItem[];
+  onHistoryChange?: (history: QAItem[]) => void;
+  cachedChunks?: string[] | null;
+  cachedEmbeddings?: number[][] | null;
+  onEmbeddingsComputed?: (chunks: string[], embeddings: number[][]) => void;
 }
 
 const EXAMPLE_QUESTIONS = [
@@ -22,9 +27,18 @@ const EXAMPLE_QUESTIONS = [
   "What are the confidentiality requirements?",
 ];
 
-export default function QAPanel({ documentText }: QAPanelProps) {
+export default function QAPanel({
+  documentText,
+  cachedHistory,
+  onHistoryChange,
+  cachedChunks,
+  cachedEmbeddings,
+  onEmbeddingsComputed,
+}: QAPanelProps) {
   const [question, setQuestion] = useState("");
-  const [history, setHistory] = useState<QAItem[]>([]);
+  const [history, setHistory] = useState<QAItem[]>(cachedHistory ?? []);
+  const [chunks, setChunks] = useState<string[] | null>(cachedChunks ?? null);
+  const [embeddings, setEmbeddings] = useState<number[][] | null>(cachedEmbeddings ?? null);
   const currentQuestion = useRef("");
 
   const { text, isStreaming, isDone, error, viaFallback, startStream } = useStreamingResponse();
@@ -34,15 +48,33 @@ export default function QAPanel({ documentText }: QAPanelProps) {
     const query = q ?? question;
     if (!query.trim() || isStreaming) return;
     currentQuestion.current = query;
-    await startStream("/api/ask", { text: documentText, question: query });
-  }, [documentText, question, isStreaming, startStream]);
+
+    const payload: { question: string; text: string; chunks?: string[]; embeddings?: number[][] } = {
+      text: documentText,
+      question: query,
+    };
+    if (chunks && embeddings) {
+      payload.chunks = chunks;
+      payload.embeddings = embeddings;
+    }
+
+    await startStream("/api/ask", payload, (meta) => {
+      if (meta?.chunks && meta?.embeddings) {
+        setChunks(meta.chunks);
+        setEmbeddings(meta.embeddings);
+        onEmbeddingsComputed?.(meta.chunks, meta.embeddings);
+      }
+    });
+  }, [documentText, question, isStreaming, startStream, chunks, embeddings, onEmbeddingsComputed]);
 
   if (isDone && !prevIsDone.current && text && currentQuestion.current) {
     prevIsDone.current = true;
-    setHistory((prev) => [
+    const newHistory = [
       { question: currentQuestion.current, answer: text },
-      ...prev,
-    ]);
+      ...history,
+    ];
+    setHistory(newHistory);
+    onHistoryChange?.(newHistory);
     setQuestion("");
   }
   if (!isDone) prevIsDone.current = false;

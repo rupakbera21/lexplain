@@ -5,9 +5,18 @@ import FallbackBadge from "./FallbackBadge";
 import DocumentUploader from "./DocumentUploader";
 import { ComparisonResult, ComparisonItem, ApiError } from "@/types";
 
+export interface CompareCacheEntry {
+  secondaryText: string;
+  secondaryName: string;
+  result: ComparisonResult;
+  viaFallback: boolean;
+}
+
 interface ComparePanelProps {
   primaryText: string;
   primaryName: string;
+  cachedCompare?: CompareCacheEntry | null;
+  onCompareComplete?: (entry: CompareCacheEntry) => void;
 }
 
 const SIG_CONFIG = {
@@ -68,14 +77,19 @@ function ComparisonCard({ item }: { item: ComparisonItem }) {
   );
 }
 
-export default function ComparePanel({ primaryText, primaryName }: ComparePanelProps) {
-  const [secondaryText, setSecondaryText] = useState<string | null>(null);
-  const [secondaryName, setSecondaryName] = useState("Document 2");
+export default function ComparePanel({
+  primaryText,
+  primaryName,
+  cachedCompare,
+  onCompareComplete,
+}: ComparePanelProps) {
+  const [secondaryText, setSecondaryText] = useState<string | null>(cachedCompare?.secondaryText ?? null);
+  const [secondaryName, setSecondaryName] = useState(cachedCompare?.secondaryName ?? "Document 2");
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ComparisonResult | null>(null);
+  const [result, setResult] = useState<ComparisonResult | null>(cachedCompare?.result ?? null);
   const [error, setError] = useState<ApiError | null>(null);
   const [filterSig, setFilterSig] = useState<"all" | "major" | "moderate" | "minor">("all");
-  const [viaFallback, setViaFallback] = useState(false);
+  const [viaFallback, setViaFallback] = useState(cachedCompare?.viaFallback ?? false);
 
   const handleCompare = useCallback(async () => {
     if (!secondaryText) return;
@@ -97,14 +111,22 @@ export default function ComparePanel({ primaryText, primaryName }: ComparePanelP
       const data = await res.json();
       if (!res.ok) { setError(data as ApiError); return; }
       const { _via_fallback, ...resultData } = data as ComparisonResult & { _via_fallback?: boolean };
-      setViaFallback(Boolean(_via_fallback));
-      setResult(resultData as ComparisonResult);
+      const fb = Boolean(_via_fallback);
+      setViaFallback(fb);
+      const resData = resultData as ComparisonResult;
+      setResult(resData);
+      onCompareComplete?.({
+        secondaryText,
+        secondaryName,
+        result: resData,
+        viaFallback: fb,
+      });
     } catch {
       setError({ error: "Couldn't compare the documents right now — please try again.", errorType: "UNKNOWN", retryable: true });
     } finally {
       setIsLoading(false);
     }
-  }, [primaryText, primaryName, secondaryText, secondaryName]);
+  }, [primaryText, primaryName, secondaryText, secondaryName, onCompareComplete]);
 
   const filteredItems = result?.items.filter(
     (i) => filterSig === "all" || i.significance === filterSig

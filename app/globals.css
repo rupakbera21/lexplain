@@ -1,18 +1,9 @@
 @import "tailwindcss";
 
-/* ── Fonts ─────────────────────────────────────────────────── */
-@import "@fontsource/sora/400.css";
-@import "@fontsource/sora/600.css";
-@import "@fontsource/sora/700.css";
-@import "@fontsource/sora/800.css";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
-@import "@fontsource/inter/600.css";
-
 /* ── Design Tokens (Clean White Theme) ─────────────────────── */
 :root {
-  --font-display: "Sora", system-ui, sans-serif;
-  --font-body:    "Inter", system-ui, sans-serif;
+  --font-display: var(--font-sora), "Sora", system-ui, sans-serif;
+  --font-body:    var(--font-inter), "Inter", system-ui, sans-serif;
 
   /* Palette — Crisp light canvas with royal blue & cyan brand accents */
   --color-bg:           #f8fafc;

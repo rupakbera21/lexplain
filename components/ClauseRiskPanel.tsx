@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import FallbackBadge from "./FallbackBadge";
 import { ClauseAnalysis, Clause, ClauseType, Severity, ApiError } from "@/types";
 
@@ -176,17 +176,24 @@ export default function ClauseRiskPanel({
     }
   }, [documentText, documentHash, cachedAnalysis, onAnalysisComplete]);
 
-  const filteredClauses = analysis?.clauses.filter(
-    (c) => filter === "all" || c.type === filter
-  ) ?? [];
+  const filteredClauses = useMemo(
+    () =>
+      analysis?.clauses.filter(
+        (c) => filter === "all" || c.type === filter
+      ) ?? [],
+    [analysis, filter]
+  );
 
-  const filterLabels: Record<FilterType, string> = {
-    all: `All (${analysis?.clauses.length ?? 0})`,
-    risk: `Risks (${analysis?.clauses.filter((c) => c.type === "risk").length ?? 0})`,
-    obligation: `Obligations (${analysis?.clauses.filter((c) => c.type === "obligation").length ?? 0})`,
-    right: `Rights (${analysis?.clauses.filter((c) => c.type === "right").length ?? 0})`,
-    neutral: `Neutral (${analysis?.clauses.filter((c) => c.type === "neutral").length ?? 0})`,
-  };
+  const filterLabels: Record<FilterType, string> = useMemo(
+    () => ({
+      all: `All (${analysis?.clauses.length ?? 0})`,
+      risk: `Risks (${analysis?.clauses.filter((c) => c.type === "risk").length ?? 0})`,
+      obligation: `Obligations (${analysis?.clauses.filter((c) => c.type === "obligation").length ?? 0})`,
+      right: `Rights (${analysis?.clauses.filter((c) => c.type === "right").length ?? 0})`,
+      neutral: `Neutral (${analysis?.clauses.filter((c) => c.type === "neutral").length ?? 0})`,
+    }),
+    [analysis]
+  );
 
   return (
     <section aria-labelledby="clause-heading" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>

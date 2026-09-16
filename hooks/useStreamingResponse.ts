@@ -27,7 +27,7 @@ export function useStreamingResponse() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const startStream = useCallback(async (url: string, body: object) => {
+  const startStream = useCallback(async (url: string, body: object, onMeta?: (meta: any) => void) => {
     // Cancel any existing stream
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -110,6 +110,12 @@ export function useStreamingResponse() {
             // via_fallback sentinel — set badge, don't accumulate text
             if (parsed.via_fallback) {
               setState((prev) => ({ ...prev, viaFallback: true }));
+              continue;
+            }
+
+            // meta sentinel — send metadata (chunks, embeddings) to callback, don't accumulate text
+            if ((parsed as any).meta) {
+              onMeta?.((parsed as any).meta);
               continue;
             }
 
