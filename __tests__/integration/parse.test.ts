@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/parse.test.ts
 //
 // POST /api/parse — document parsing integration tests.
@@ -13,7 +13,7 @@ jest.mock("@/lib/parsers", () => ({
 }));
 
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import { parseDocument } from "@/lib/parsers";
@@ -47,7 +47,7 @@ const LONG_ENOUGH = "This is a pasted legal document with sufficient content for
 describe("POST /api/parse", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   // ── Pasted text path ────────────────────────────────────────
@@ -108,7 +108,7 @@ describe("POST /api/parse", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded.",
       errorType: "RATE_LIMIT",
       retryable: true,

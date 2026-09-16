@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/simplify.test.ts
 //
 // POST /api/simplify — streaming response integration tests.
@@ -15,7 +15,7 @@ jest.mock("@/lib/gemini", () => ({
 
 // Mock rate limiter (allow all by default)
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import { generateStreamingResponse } from "@/lib/gemini";
@@ -48,7 +48,7 @@ const VALID_TEXT = "This is a valid legal document with sufficient length for te
 describe("POST /api/simplify", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   it("returns 400 for missing text", async () => {
@@ -100,7 +100,7 @@ describe("POST /api/simplify", () => {
   });
 
   it("returns 429 when rate limit is hit", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded. Please wait 30 seconds before trying again.",
       errorType: "RATE_LIMIT",
       retryable: true,

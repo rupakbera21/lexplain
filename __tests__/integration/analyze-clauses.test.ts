@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/analyze-clauses.test.ts
 //
 // POST /api/analyze-clauses — clause extraction integration tests.
@@ -13,7 +13,7 @@ jest.mock("@/lib/gemini", () => ({
 }));
 
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import { generateStructuredJSON } from "@/lib/gemini";
@@ -56,7 +56,7 @@ const MOCK_GEMINI_RESPONSE = {
 describe("POST /api/analyze-clauses", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   it("returns 400 for missing text", async () => {
@@ -72,7 +72,7 @@ describe("POST /api/analyze-clauses", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded.",
       errorType: "RATE_LIMIT",
       retryable: true,

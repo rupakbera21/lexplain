@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/compare.test.ts
 //
 // POST /api/compare — document comparison integration tests.
@@ -12,7 +12,7 @@ jest.mock("@/lib/gemini", () => ({
 }));
 
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import { generateStructuredJSON } from "@/lib/gemini";
@@ -29,8 +29,8 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-const DOC1 = "This is the first legal document with enough text content for testing purposes here.";
-const DOC2 = "This is the second legal document with enough text content but with different terms here.";
+const DOC1 = "Agreement A: Payment is due net 30. Either party may terminate with 30 days notice.";
+const DOC2 = "Agreement B: Payment is due on receipt. Only company may terminate at will.";
 
 const MOCK_COMPARISON = {
   items: [
@@ -49,7 +49,7 @@ const MOCK_COMPARISON = {
 describe("POST /api/compare", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   it("returns 400 for missing first document", async () => {
@@ -65,7 +65,7 @@ describe("POST /api/compare", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded.",
       errorType: "RATE_LIMIT",
       retryable: true,

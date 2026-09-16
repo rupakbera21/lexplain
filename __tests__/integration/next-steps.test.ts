@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/next-steps.test.ts
 //
 // POST /api/next-steps — checklist generation integration tests.
@@ -13,7 +13,7 @@ jest.mock("@/lib/gemini", () => ({
 }));
 
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import { generateStructuredJSON } from "@/lib/gemini";
@@ -30,7 +30,8 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-const DOC_TEXT = "This is a valid legal document with sufficient content for checklist generation.";
+const DOC_TEXT =
+  "Section 1: The User agrees not to sue. Section 2: Arbitration is mandatory in Delaware. Section 3: All rights are waived.";
 
 const RISK_CLAUSES = [
   {
@@ -54,7 +55,7 @@ const MOCK_NEXT_STEPS = {
 describe("POST /api/next-steps", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   it("returns 400 for missing document text", async () => {
@@ -65,7 +66,7 @@ describe("POST /api/next-steps", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded.",
       errorType: "RATE_LIMIT",
       retryable: true,

@@ -1,44 +1,61 @@
 // ============================================================
-// lib/ratelimit.ts — In-memory rate limiting for API routes
+// lib/ratelimit.ts — Distributed rate limiting via Upstash Redis
 //
 // Limits to RATE_LIMIT_RPM requests per minute per IP address.
-// Uses a sliding-window algorithm. No external services needed.
+// Uses Upstash Ratelimit with a sliding window algorithm and an
+// ephemeral in-memory cache for warm lambda efficiency.
+// Fails open gracefully if Redis is unavailable or unconfigured.
 // ============================================================
 
 import { NextRequest } from "next/server";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { ApiError } from "@/types";
 
-const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_RPM ?? "20", 10);
 
-// In-memory store: IP → list of request timestamps
-// KNOWN LIMITATION: This store is not shared across Vercel serverless instances.
-// A user could bypass the rate limit by triggering cold-start Lambda instances.
-// For stronger enforcement in production, replace with a Redis/KV-backed limiter.
-// Left as-is intentionally — infra change tracked for future work.
-const requestLog = new Map<string, number[]>();
+let ratelimitInstance: Ratelimit | null = null;
+let isInitialized = false;
 
-// Clean up old entries every 5 minutes to prevent memory leaks
-const cleanupTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [ip, timestamps] of requestLog.entries()) {
-    const valid = timestamps.filter((t) => now - t < WINDOW_MS);
-    if (valid.length === 0) {
-      requestLog.delete(ip);
-    } else {
-      requestLog.set(ip, valid);
-    }
+export function getRatelimit(): Ratelimit | null {
+  if (isInitialized) return ratelimitInstance;
+  isInitialized = true;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    console.warn(
+      "[Lexplain:RateLimit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN is not configured. Rate limiting is running in fail-open mode."
+    );
+    return null;
   }
-}, 5 * 60 * 1000);
-if (typeof cleanupTimer.unref === "function") {
-  cleanupTimer.unref();
+
+  try {
+    const redis = new Redis({ url, token });
+    ratelimitInstance = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(MAX_REQUESTS, "60 s"),
+      ephemeralCache: new Map(),
+      prefix: "lexplain:ratelimit",
+    });
+    return ratelimitInstance;
+  } catch (err) {
+    console.error("[Lexplain:RateLimit] Failed to initialize Upstash Redis client:", err);
+    return null;
+  }
+}
+
+export function resetRatelimitInstanceForTesting(): void {
+  ratelimitInstance = null;
+  isInitialized = false;
 }
 
 /**
  * Gets the client IP from the request headers.
  * Works behind Vercel's proxy (x-forwarded-for).
  */
-function getClientIP(req: NextRequest): string {
+export function getClientIP(req: NextRequest): string {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     req.headers.get("x-real-ip") ??
@@ -49,26 +66,32 @@ function getClientIP(req: NextRequest): string {
 /**
  * Checks if the request should be rate-limited.
  * Returns null if allowed, or an ApiError if rate limit exceeded.
+ * Fails open (returns null) on Redis connection error to avoid blocking users.
  */
-export function checkRateLimit(req: NextRequest): ApiError | null {
-  const ip = getClientIP(req);
-  const now = Date.now();
-
-  const existing = requestLog.get(ip) ?? [];
-  const windowStart = now - WINDOW_MS;
-  const inWindow = existing.filter((t) => t > windowStart);
-
-  if (inWindow.length >= MAX_REQUESTS) {
-    const oldestInWindow = inWindow.reduce((min, t) => (t < min ? t : min), inWindow[0]);
-    const resetIn = Math.ceil((oldestInWindow + WINDOW_MS - now) / 1000);
-    return {
-      error: `Rate limit exceeded. Please wait ${resetIn} seconds before trying again.`,
-      errorType: "RATE_LIMIT",
-      retryable: true,
-    };
+export async function checkRateLimit(req: NextRequest): Promise<ApiError | null> {
+  const limiter = getRatelimit();
+  if (!limiter) {
+    // Fail open if credentials are not configured
+    return null;
   }
 
-  inWindow.push(now);
-  requestLog.set(ip, inWindow);
-  return null;
+  const ip = getClientIP(req);
+
+  try {
+    const { success, reset } = await limiter.limit(ip);
+
+    if (!success) {
+      const resetIn = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+      return {
+        error: `Rate limit exceeded. Please wait ${resetIn} seconds before trying again.`,
+        errorType: "RATE_LIMIT",
+        retryable: true,
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.error("[Lexplain:RateLimit] Rate limit check failed, failing open:", err);
+    return null;
+  }
 }

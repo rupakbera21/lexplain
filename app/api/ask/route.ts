@@ -23,7 +23,7 @@ function errorResponse(err: ApiError, status: number = 400) {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse | Response> {
-  const rateLimitError = checkRateLimit(req);
+  const rateLimitError = await checkRateLimit(req);
   if (rateLimitError) return errorResponse(rateLimitError, 429);
 
   let body: {

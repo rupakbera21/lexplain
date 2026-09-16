@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // __tests__/integration/ask.test.ts
 //
 // POST /api/ask — RAG Q&A route integration tests.
@@ -15,7 +15,7 @@ jest.mock("@/lib/gemini", () => ({
 }));
 
 jest.mock("@/lib/ratelimit", () => ({
-  checkRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(async () => null),
 }));
 
 import {
@@ -57,7 +57,7 @@ const QUERY_EMBEDDING = [1, 0, 0]; // identical = similarity 1.0
 describe("POST /api/ask", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockReturnValue(null);
+    mockCheckRateLimit.mockResolvedValue(null);
   });
 
   it("returns 400 for missing question", async () => {
@@ -78,7 +78,7 @@ describe("POST /api/ask", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockReturnValueOnce({
+    mockCheckRateLimit.mockResolvedValueOnce({
       error: "Rate limit exceeded.",
       errorType: "RATE_LIMIT",
       retryable: true,
