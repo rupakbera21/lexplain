@@ -21,8 +21,8 @@ export function getRatelimit(): Ratelimit | null {
   if (isInitialized) return ratelimitInstance;
   isInitialized = true;
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = process.env.UPSTASH_REDIS_REST_URL?.replace(/^["']|["']$/g, "").trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.replace(/^["']|["']$/g, "").trim();
 
   if (!url || !token) {
     console.warn(
