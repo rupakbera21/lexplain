@@ -106,22 +106,16 @@ Answer based ONLY on the context above. Cite your sources using [Context N] nota
     // ── Stream the grounded answer ────────────────────────────
     const stream = await generateStreamingResponse(prompt, systemPrompt);
 
-    // Include chunk data for client-side caching (only when freshly computed)
-    const responseHeaders: Record<string, string> = {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-    };
-
-    if (!providedChunks) {
-      // Send chunks and embeddings as a header so client can cache them
-      // (only first call per document session)
-      responseHeaders["X-Chunks"] = JSON.stringify(chunks).slice(0, 4000); // headers have size limits
-    }
-
-    return new Response(stream, { headers: responseHeaders });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   } catch (err: unknown) {
+    console.error("[Lexplain:Ask] Error in ask route:", err);
     const apiErr = err as ApiError;
     const status = apiErr.errorType === "RATE_LIMIT" ? 429 : apiErr.errorType === "INVALID_INPUT" ? 400 : 503;
     return errorResponse(
