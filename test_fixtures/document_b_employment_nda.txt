@@ -1,0 +1,31 @@
+EMPLOYMENT OFFER LETTER AND PROPRIETARY INFORMATION AGREEMENT
+
+Date: June 15, 2026
+Candidate: Alex Rivera
+Position: Senior Systems Architect
+Company: Nexus Dynamics Inc. ("Company")
+
+Dear Alex,
+
+Nexus Dynamics Inc. is pleased to offer you full-time employment on the terms and conditions set forth in this Offer Letter and Proprietary Information Agreement ("Agreement").
+
+1. COMPENSATION AND DUTIES
+You will receive an annualized base salary of $165,000.00, payable semi-monthly in accordance with Company payroll schedules. You will report to the Chief Technology Officer and devote your full business time and best efforts to Company operations.
+
+2. CONFIDENTIALITY AND PROPRIETARY INFORMATION
+You agree that all non-public technical data, source code, trade secrets, business models, financial data, and customer identities disclosed to you during your employment are the sole proprietary property of Company. You agree to hold all Confidential Information in strictest confidence both during and perpetually after termination of your employment.
+
+3. INTELLECTUAL PROPERTY AND ASSIGNMENT OF INVENTIONS
+You agree to assign and do hereby irrevocably assign to Company all right, title, and interest in and to any inventions, software, trade secrets, designs, or ideas conceived, developed, or reduced to practice by you, whether created solely or collaboratively, during your entire period of employment, INCLUDING any creations produced during non-work hours, weekends, or using personal equipment if related broadly to software systems or internet technology.
+
+4. NON-COMPETE AND NON-SOLICITATION COVENANTS
+During your employment and for a restrictive covenant period of twenty-four (24) months following termination of employment for any reason, you shall not directly or indirectly engage in, advise, invest in, or perform services for any business entity that competes with Company within a 150-mile geographic radius of any Company office or client site. Additionally, you agree not to recruit or solicit any Company employee, contractor, or customer for twenty-four (24) months post-departure.
+
+5. TERMINATION AND AT-WILL EMPLOYMENT
+Your employment is at-will. Either you or Company may terminate the relationship at any time, with or without cause or advance notice. However, in the event Company terminates your employment "For Cause" (defined broadly at Company's sole subjective discretion to include failure to meet internal milestones, interpersonal disputes, or perceived breach of company ethos), you shall immediately forfeit all earned but unpaid bonuses, severance entitlements, and all unvested and vested stock options.
+
+6. RETURN OF COMPANY PROPERTY AND SURVEILLANCE CONSENT
+Upon separation, you must immediately return all hardware, files, and credentials. You expressly consent to continuous monitoring, keystroke logging, and inspection of any personal digital devices or personal cloud accounts accessed while connected to any Company network.
+
+7. GOVERNING LAW AND ARBITRATION
+This Agreement is governed by the laws of the State of Delaware. Any dispute shall be settled exclusively via confidential, individual binding arbitration in Wilmington, Delaware. You expressly waive any right to bring claims before a court, administrative jury, or as part of a collective or class action.
